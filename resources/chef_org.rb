@@ -29,17 +29,8 @@ property :admins, Array, required: true
 property :users, Array, default: []
 property :remove_users, Array, default: []
 property :key_path, String
+property :chef_server_url, String, required: true
 property :pivotal_key, String, default: '/etc/opscode/pivotal.pem' # Assumes pivotal key is in the default location
-property :client_rb, String, default: '/etc/chef/client.rb'
-
-Chef::Config.from_file("#{client_rb}")
-property :chef_server_url, String, default: Chef::Config[:chef_server_url].gsub(%r{/organizations/.*}, '')
-
-# Intialize Chef::Config with pivotal
-Chef::Config[:chef_server_url] = "#{chef_server_url}/organizations/#{new_resource.org}"
-Chef::Config[:client_name] = 'pivotal'
-Chef::Config[:client_key] = pivotal_key
-api = Chef::ServerAPI.new(Chef::Config[:chef_server_url])
 
 load_current_value do
   node.run_state['chef-users'] ||= shell_out('chef-server-ctl user-list').stdout
@@ -47,11 +38,16 @@ load_current_value do
   users.each do |user|
     node.run_state["#{user}_orgs"] ||= JSON.parse(shell_out("chef-server-ctl user-show #{user} -l -F json").stdout.strip)['organizations']
   end
-  node.run_state["#{org}_admins"] ||=
   current_value_does_not_exist! unless node.run_state['chef-orgs'].index(/^#{org}$/)
 end
 
 action :create do
+  # Inisitialize the Chef API with pivotal
+  Chef::Config[:chef_server_url] = new_resource.chef_server_url
+  Chef::Config[:client_name] = 'pivotal'
+  Chef::Config[:client_key] = new_resource.pivotal_key
+  api = Chef::ServerAPI.new(Chef::Config[:chef_server_url])
+
   directory '/etc/opscode/orgs' do
     owner 'root'
     group 'root'
