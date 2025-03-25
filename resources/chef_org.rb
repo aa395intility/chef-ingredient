@@ -32,7 +32,7 @@ property :key_path, String
 property :pivotal_key, String, default: '/etc/opscode/pivotal.pem' # Assumes pivotal key is in the default location
 property :client_rb, String, default: '/etc/chef/client.rb'
 
-Chef::Config.from_file("#{new_resource.client_rb}")
+Chef::Config.from_file(new_resource.client_rb)
 property :chef_server_url, String, default: Chef::Config[:chef_server_url].gsub(%r{/organizations/.*}, '')
 
 # Intialize Chef::Config with pivotal
