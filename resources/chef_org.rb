@@ -29,8 +29,6 @@ property :admins, Array, required: true
 property :users, Array, default: []
 property :remove_users, Array, default: []
 property :key_path, String
-property :chef_server_url, String, required: true
-property :pivotal_key, String, default: '/etc/opscode/pivotal.pem' # Assumes pivotal key is in the default location
 
 load_current_value do
   node.run_state['chef-users'] ||= shell_out('chef-server-ctl user-list').stdout
@@ -42,12 +40,6 @@ load_current_value do
 end
 
 action :create do
-  # Inisitialize the Chef API with pivotal
-  Chef::Config[:chef_server_url] = new_resource.chef_server_url
-  Chef::Config[:client_name] = 'pivotal'
-  Chef::Config[:client_key] = new_resource.pivotal_key
-  api = Chef::ServerAPI.new(Chef::Config[:chef_server_url])
-
   directory '/etc/opscode/orgs' do
     owner 'root'
     group 'root'
@@ -76,7 +68,6 @@ action :create do
     execute "add-admin-#{user}-org-#{new_resource.org}" do
       command "chef-server-ctl org-user-add --admin #{new_resource.org} #{user}"
       only_if { node.run_state['chef-users'].index(/^#{user}$/) }
-      not_if { api.get("organizations/#{new_resource.org}/groups/admins")['users'].include?(user) }
     end
   end
 
