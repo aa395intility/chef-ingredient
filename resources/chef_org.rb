@@ -25,17 +25,11 @@ unified_mode true if respond_to?(:unified_mode)
 
 property :org, String, name_property: true
 property :org_full_name, String
-property :admins, Array, required: true
-property :users, Array, default: []
-property :remove_users, Array, default: []
+property :admin, String, required: true
 property :key_path, String
 
 load_current_value do
-  node.run_state['chef-users'] ||= JSON.parse(shell_out('chef-server-ctl user-list -F json').stdout.strip)
   node.run_state['chef-orgs'] ||= JSON.parse(shell_out('chef-server-ctl org-list -F json').stdout.strip)
-  users.each do |user|
-    node.run_state["#{user}_orgs"] ||= JSON.parse(shell_out("chef-server-ctl user-show #{user} -l -F json").stdout.strip)['organizations']
-  end
   current_value_does_not_exist! unless node.run_state['chef-orgs'].include?("#{org}")
 end
 
@@ -51,33 +45,8 @@ action :create do
   key = (property_is_set?(:key_path) ? new_resource.key_path : "/etc/opscode/orgs/#{new_resource.org}-validation.pem")
   execute "create-org-#{new_resource.org}" do
     retries 10
-    command "chef-server-ctl org-create #{new_resource.org} '#{org_full_name}' -f #{key}"
+    command "chef-server-ctl org-create #{new_resource.org} '#{org_full_name}' -a #{new_resource.admin} -f #{key}"
     not_if { node.run_state['chef-orgs'].include?("#{new_resource.org}") }
-  end
-
-  new_resource.users.each do |user|
-    org_user_exist = node.run_state["#{user}_orgs"].include?(new_resource.org)
-    execute "add-user-#{user}-org-#{new_resource.org}" do
-      command "chef-server-ctl org-user-add #{new_resource.org} #{user}"
-      only_if { node.run_state['chef-users'].include?("#{user}") }
-      not_if { org_user_exist }
-    end
-  end
-
-  new_resource.admins.each do |user|
-    execute "add-admin-#{user}-org-#{new_resource.org}" do
-      command "chef-server-ctl org-user-add --admin #{new_resource.org} #{user}"
-      only_if { node.run_state['chef-users'].include?("#{user}") }
-    end
-  end
-
-  new_resource.remove_users.each do |user|
-    org_user_exist = JSON.parse(shell_out("chef-server-ctl user-show #{user} -l -F json").stdout)['organizations'].include?(new_resource.org)
-    execute "remove-user-#{user}-org-#{new_resource.org}" do
-      command "chef-server-ctl org-user-remove #{new_resource.org} #{user}"
-      only_if { node.run_state['chef-users'].include?("#{user}") }
-      only_if { org_user_exist }
-    end
   end
 end
 
